@@ -86,13 +86,13 @@ class BotHandlers:
         elif text == '🤖 AI Chat':
             await self.prompt_ai_chat(update, context)
         else:
-            # Check if it's a math expression or function
-            if self.is_math_expression(text):
-                await self.solve_math_expression(update, context, text)
-            elif self.is_function_expression(text):
+            # Check if it's a function first (higher priority than math expressions)
+            if self.is_function_expression(text):
                 await self.analyze_function(update, context, text)
             elif self.is_alarm_time(text):
                 await self.add_alarm(update, context, text)
+            elif self.is_math_expression(text):
+                await self.solve_math_expression(update, context, text)
             else:
                 # Handle with AI assistant for natural conversation
                 await self.handle_ai_conversation(update, context, text)
@@ -168,13 +168,51 @@ class BotHandlers:
     
     def is_function_expression(self, text: str) -> bool:
         """Check if text looks like a function definition"""
-        function_patterns = [
-            r'f\(x\)\s*=',
-            r'y\s*=',
-            r'x\^?\d+',  # x with power
-            r'x[\+\-\*/]',  # x with operators
+        # Strong function indicators (explicit function notation)
+        strong_function_patterns = [
+            r'f\(x\)\s*=',  # f(x) = ...
+            r'y\s*=',       # y = ...
+            r'g\(x\)\s*=',  # g(x) = ...
+            r'h\(x\)\s*=',  # h(x) = ...
         ]
-        return any(re.search(pattern, text.lower()) for pattern in function_patterns)
+
+        # Check for explicit function notation first
+        if any(re.search(pattern, text.lower()) for pattern in strong_function_patterns):
+            return True
+
+        # Check for polynomial-like expressions with x
+        # These are likely functions if they contain x with powers or operations
+        if 'x' in text.lower():
+            polynomial_patterns = [
+                r'x\^?\d+',     # x^2, x2, x^3, etc.
+                r'x\s*[\+\-]',  # x + ..., x - ...
+                r'[\+\-]\s*x',  # ... + x, ... - x
+                r'\d+\s*\*?\s*x',  # 2x, 2*x, etc.
+                r'x\s*\*\s*x',  # x*x
+            ]
+
+            # Check for trigonometric functions with x
+            trig_with_x_patterns = [
+                r'sin\s*\(\s*x',    # sin(x)
+                r'cos\s*\(\s*x',    # cos(x)
+                r'tan\s*\(\s*x',    # tan(x)
+                r'log\s*\(\s*x',    # log(x)
+                r'ln\s*\(\s*x',     # ln(x)
+                r'sqrt\s*\(\s*x',   # sqrt(x)
+                r'exp\s*\(\s*x',    # exp(x)
+            ]
+
+            # If it contains x and polynomial patterns, it's likely a function
+            if any(re.search(pattern, text.lower()) for pattern in polynomial_patterns):
+                # Additional check: if it's just a number, it's not a function
+                if not re.match(r'^\s*\d+\.?\d*\s*$', text):
+                    return True
+
+            # If it contains trigonometric functions with x, it's a function
+            if any(re.search(pattern, text.lower()) for pattern in trig_with_x_patterns):
+                return True
+
+        return False
     
     def is_alarm_time(self, text: str) -> bool:
         """Check if text looks like a time format"""

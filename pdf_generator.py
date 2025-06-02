@@ -1,5 +1,6 @@
 import os
 import base64
+import time
 from datetime import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -278,9 +279,65 @@ class PDFGenerator:
         """Delete a temporary file"""
         try:
             if os.path.exists(filename):
+                file_size = os.path.getsize(filename)
                 os.remove(filename)
+                print(f"🗑️ Cleaned up PDF: {os.path.basename(filename)} ({file_size:,} bytes)")
+            else:
+                print(f"⚠️ File not found for cleanup: {os.path.basename(filename)}")
         except Exception as e:
-            print(f"Error cleaning up file {filename}: {e}")
+            print(f"❌ Error cleaning up file {filename}: {e}")
+
+    def cleanup_old_files(self, max_age_hours: int = 24):
+        """Clean up old temporary files"""
+        try:
+            temp_dir = Config.TEMP_DIR
+            if not os.path.exists(temp_dir):
+                return
+
+            current_time = time.time()
+            cleaned_count = 0
+            total_size = 0
+
+            for filename in os.listdir(temp_dir):
+                if filename.endswith('.pdf') or filename.endswith('.png'):
+                    file_path = os.path.join(temp_dir, filename)
+                    try:
+                        file_age = current_time - os.path.getmtime(file_path)
+                        if file_age > (max_age_hours * 3600):  # Convert hours to seconds
+                            file_size = os.path.getsize(file_path)
+                            os.remove(file_path)
+                            cleaned_count += 1
+                            total_size += file_size
+                    except Exception as e:
+                        print(f"Error cleaning old file {filename}: {e}")
+
+            if cleaned_count > 0:
+                print(f"🧹 Cleaned up {cleaned_count} old files ({total_size:,} bytes freed)")
+
+        except Exception as e:
+            print(f"Error during old file cleanup: {e}")
+
+    def get_temp_dir_stats(self):
+        """Get statistics about temporary directory"""
+        try:
+            temp_dir = Config.TEMP_DIR
+            if not os.path.exists(temp_dir):
+                return {"files": 0, "size": 0}
+
+            file_count = 0
+            total_size = 0
+
+            for filename in os.listdir(temp_dir):
+                file_path = os.path.join(temp_dir, filename)
+                if os.path.isfile(file_path):
+                    file_count += 1
+                    total_size += os.path.getsize(file_path)
+
+            return {"files": file_count, "size": total_size}
+
+        except Exception as e:
+            print(f"Error getting temp dir stats: {e}")
+            return {"files": 0, "size": 0}
 
 # Global PDF generator instance
 pdf_generator = PDFGenerator()

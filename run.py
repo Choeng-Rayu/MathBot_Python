@@ -127,6 +127,37 @@ async def start_polling_mode():
         alarm_manager_instance.start_scheduler()
         alarm_manager_instance.schedule_all_user_alarms()
 
+        # Schedule automatic file cleanup
+        from pdf_generator import pdf_generator
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+        cleanup_scheduler = AsyncIOScheduler()
+
+        # Clean up old files every hour
+        cleanup_scheduler.add_job(
+            pdf_generator.cleanup_old_files,
+            'interval',
+            hours=1,
+            args=[24],  # Clean files older than 24 hours
+            id='cleanup_old_files'
+        )
+
+        # Show temp directory stats every 6 hours
+        def show_temp_stats():
+            stats = pdf_generator.get_temp_dir_stats()
+            if stats['files'] > 0:
+                print(f"📁 Temp directory: {stats['files']} files, {stats['size']:,} bytes")
+
+        cleanup_scheduler.add_job(
+            show_temp_stats,
+            'interval',
+            hours=6,
+            id='show_temp_stats'
+        )
+
+        cleanup_scheduler.start()
+        print("🧹 Automatic file cleanup scheduled")
+
         # Start polling
         await app.initialize()
         await app.start()
@@ -151,6 +182,7 @@ async def start_polling_mode():
         signal.signal(signal.SIGTERM, signal_handler)
 
         # Keep running until interrupted
+        
         try:
             while True:
                 await asyncio.sleep(1)
@@ -161,6 +193,12 @@ async def start_polling_mode():
             await app.stop()
             await app.shutdown()
             alarm_manager_instance.stop_scheduler()
+            cleanup_scheduler.shutdown()
+
+            # Final cleanup of temporary files
+            print("🧹 Performing final cleanup...")
+            pdf_generator.cleanup_old_files(0)  # Clean all files
+
             print("✅ Bot shutdown complete")
 
     except Exception as e:
