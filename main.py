@@ -86,6 +86,18 @@ async def setup_telegram_bot():
         # Schedule existing alarms
         alarm_manager_instance.schedule_all_user_alarms()
 
+        # Set webhook in production mode (when WEBHOOK_URL is provided)
+        if Config.WEBHOOK_URL:
+            try:
+                webhook_url = f"{Config.WEBHOOK_URL}/webhook"
+                success = await telegram_app.bot.set_webhook(url=webhook_url)
+                if success:
+                    logger.info(f"✅ Webhook set successfully to: {webhook_url}")
+                else:
+                    logger.error("❌ Failed to set webhook")
+            except Exception as e:
+                logger.error(f"❌ Error setting webhook: {e}")
+
         logger.info("✅ Telegram bot initialized successfully")
         logger.info(f"🚀 Bot is now running and ready to receive messages!")
 

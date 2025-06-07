@@ -245,7 +245,8 @@ def main():
     print(f"✅ Temporary directory created: {Config.TEMP_DIR}")
 
     # Determine mode based on environment
-    is_production = os.getenv('NODE_ENV') == 'production' or os.getenv('ENVIRONMENT') == 'production'
+    # If WEBHOOK_URL is set, we're in production mode
+    is_production = bool(Config.WEBHOOK_URL)
 
     # You can also force polling mode by setting FORCE_POLLING=true
     force_polling = os.getenv('FORCE_POLLING', '').lower() == 'true'

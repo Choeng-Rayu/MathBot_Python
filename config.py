@@ -21,6 +21,7 @@ class Config:
     # Server Configuration
     PORT = int(os.getenv("PORT", 8000))
     HOST = "0.0.0.0"
+    ENVIRONMENT = os.getenv("ENVIRONMENT", "development")  # production or development
     
     # Timezone Configuration
     TIMEZONE = "Asia/Phnom_Penh"
