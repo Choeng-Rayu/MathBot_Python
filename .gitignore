@@ -1,3 +1,12 @@
 /.env
 /.env.example
 /.temp/
+
+# Google Cloud credentials (NEVER commit these!)
+google_vision_key.json
+*_credentials.json
+service-account-*.json
+
+# Temporary files
+temp/
+*.tmp
