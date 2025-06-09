@@ -6,6 +6,7 @@
 google_vision_key.json
 *_credentials.json
 service-account-*.json
+credentials_template.md
 
 # Temporary files
 temp/
