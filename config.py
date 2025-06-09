@@ -13,6 +13,9 @@ class Config:
     DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
     DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 
+    # Google Cloud Vision API Configuration
+    GOOGLE_CLOUD_CREDENTIALS_PATH = os.getenv("GOOGLE_CLOUD_CREDENTIALS_PATH")
+
     # MongoDB Configuration
     MONGODB_URI = os.getenv("MONGODB_URI")
     DATABASE_NAME = "telegram_math_bot"

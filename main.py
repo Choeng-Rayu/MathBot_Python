@@ -74,6 +74,7 @@ async def setup_telegram_bot():
         # Add handlers
         telegram_app.add_handler(CommandHandler("start", bot_handlers.start_command))
         telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bot_handlers.handle_message))
+        telegram_app.add_handler(MessageHandler(filters.PHOTO, bot_handlers.handle_photo))
         telegram_app.add_handler(CallbackQueryHandler(bot_handlers.handle_callback_query))
 
         # Initialize the application

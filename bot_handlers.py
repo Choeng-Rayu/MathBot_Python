@@ -8,6 +8,7 @@ from function_analyzer import function_analyzer
 from pdf_generator import pdf_generator
 from alarm_manager import alarm_manager
 from ai_assistant import ai_assistant
+from ocr_service import ocr_service
 from config import Config
 import os
 
@@ -104,6 +105,111 @@ class BotHandlers:
             else:
                 # Handle with AI assistant for natural conversation
                 await self.handle_ai_conversation(update, context, text)
+
+    async def handle_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle photo messages and extract text using OCR"""
+        user_id = update.effective_user.id
+
+        # Update user activity
+        db_manager.update_last_activity(user_id)
+
+        # Check if OCR is enabled
+        if not ocr_service.is_enabled:
+            await update.message.reply_text(
+                "📷 **Photo Received!**\n\n"
+                "❌ **OCR service is not available.**\n\n"
+                "To enable text extraction from photos, the administrator needs to configure Google Cloud Vision API.\n\n"
+                "You can still use the bot for:\n"
+                "🧮 Math expressions (type them)\n"
+                "📈 Function analysis\n"
+                "⏰ Alarm management",
+                parse_mode='Markdown',
+                reply_markup=self.reply_markup
+            )
+            return
+
+        try:
+            # Show processing message
+            processing_msg = await update.message.reply_text(
+                "📷 **Processing your photo...**\n\n"
+                "🔍 Extracting text from image...",
+                parse_mode='Markdown'
+            )
+
+            # Get the largest photo size
+            photo = update.message.photo[-1]
+
+            # Download and process the photo
+            photo_file = await context.bot.get_file(photo.file_id)
+            success, extracted_text, error_message = await ocr_service.process_telegram_photo(photo_file)
+
+            if not success:
+                await processing_msg.edit_text(
+                    "📷 **Photo Processing Failed**\n\n"
+                    f"❌ **Error:** {error_message}\n\n"
+                    "**Tips for better results:**\n"
+                    "• Ensure good lighting\n"
+                    "• Keep text clear and readable\n"
+                    "• Avoid blurry or tilted images\n"
+                    "• Make sure text is large enough",
+                    parse_mode='Markdown'
+                )
+                return
+
+            # Check if extracted text contains math content
+            if ocr_service.is_math_related(extracted_text):
+                # Clean the text for math processing
+                cleaned_text = ocr_service.clean_math_text(extracted_text)
+
+                await processing_msg.edit_text(
+                    f"📷 **Text Extracted Successfully!**\n\n"
+                    f"**Raw Text:**\n`{extracted_text}`\n\n"
+                    f"**Cleaned for Math:**\n`{cleaned_text}`\n\n"
+                    f"🧮 **Processing as math expression...**",
+                    parse_mode='Markdown'
+                )
+
+                # Try to solve as math expression
+                if self.is_math_expression(cleaned_text):
+                    await self.solve_math_expression(update, context, cleaned_text)
+                elif self.is_function_expression(cleaned_text):
+                    await self.analyze_function(update, context, cleaned_text)
+                else:
+                    # Show extracted text with options
+                    await processing_msg.edit_text(
+                        f"📷 **Text Extracted Successfully!**\n\n"
+                        f"**Extracted Text:**\n`{extracted_text}`\n\n"
+                        f"**Cleaned Text:**\n`{cleaned_text}`\n\n"
+                        f"💡 **The text appears to be math-related but couldn't be automatically processed.**\n\n"
+                        f"You can:\n"
+                        f"• Copy the cleaned text and edit it manually\n"
+                        f"• Use the math solver or function analyzer\n"
+                        f"• Ask the AI assistant for help",
+                        parse_mode='Markdown',
+                        reply_markup=self.reply_markup
+                    )
+            else:
+                # Non-math text - show extracted text
+                await processing_msg.edit_text(
+                    f"📷 **Text Extracted Successfully!**\n\n"
+                    f"**Extracted Text:**\n`{extracted_text}`\n\n"
+                    f"💡 **This doesn't appear to be math content.**\n\n"
+                    f"If this is math, you can:\n"
+                    f"• Copy the text and edit it manually\n"
+                    f"• Use '🧮 Solve Math' or '📈 Solve Function'\n"
+                    f"• Ask the AI assistant for help",
+                    parse_mode='Markdown',
+                    reply_markup=self.reply_markup
+                )
+
+        except Exception as e:
+            await update.message.reply_text(
+                f"📷 **Error Processing Photo**\n\n"
+                f"❌ **Error:** {str(e)}\n\n"
+                f"Please try again with a clearer image.",
+                parse_mode='Markdown',
+                reply_markup=self.reply_markup
+            )
 
     async def handle_conversation_state(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Handle conversation states for alarm creation"""
