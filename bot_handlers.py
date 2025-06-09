@@ -259,9 +259,11 @@ class BotHandlers:
             }
 
             await update.message.reply_text(
-                f"⏰ **Set New Alarm - Step 2/2**\n\n"
-                f"✅ **Alarm Name:** {alarm_name}\n\n"
-                f"Now, send me the time for your alarm in HH:MM format.\n\n"
+                f"✅ **Alarm Name Set Successfully!**\n\n"
+                f"📝 **Your alarm name:** {alarm_name}\n\n"
+                f"🔄 **Step 2 of 2: Set Alarm Time**\n\n"
+                f"Now please set the time for your '{alarm_name}' alarm.\n\n"
+                f"**Time format: HH:MM**\n\n"
                 f"**Examples:**\n"
                 f"• `08:30` (8:30 AM)\n"
                 f"• `14:15` (2:15 PM)\n"
@@ -283,9 +285,15 @@ class BotHandlers:
             # Validate time format
             if not self.is_alarm_time(alarm_time):
                 await update.message.reply_text(
-                    "❌ **Invalid time format!**\n\n"
-                    "Please use HH:MM format (e.g., 08:30, 14:15)\n\n"
-                    "Use '⏰ Set Alarm' to try again.",
+                    f"❌ **Invalid Time Format!**\n\n"
+                    f"📝 **Alarm Name:** {alarm_name}\n"
+                    f"⏰ **Invalid Time:** {alarm_time}\n\n"
+                    f"**Please use HH:MM format:**\n"
+                    f"• `08:30` (8:30 AM)\n"
+                    f"• `14:15` (2:15 PM)\n"
+                    f"• `22:00` (10:00 PM)\n\n"
+                    f"🔄 **Please enter a valid time for your '{alarm_name}' alarm:**\n\n"
+                    f"💡 *Type 'cancel' to stop creating the alarm.*",
                     parse_mode='Markdown'
                 )
                 return
@@ -586,7 +594,9 @@ class BotHandlers:
         }
 
         await update.message.reply_text(
-            "⏰ **Set New Alarm - Step 1/2**\n\n"
+            "⏰ **Starting Alarm Setup Process**\n\n"
+            "🔄 **You are now setting up a new alarm!**\n\n"
+            "**Step 1 of 2: Set Alarm Name**\n\n"
             "First, give your alarm a name to help you remember what it's for.\n\n"
             "**Examples:**\n"
             "• `Morning Exercise`\n"
@@ -636,12 +646,16 @@ class BotHandlers:
                 alarm_manager.schedule_alarm(user_id, alarm_time)
 
             await update.message.reply_text(
-                f"✅ **Alarm Set Successfully!**\n\n"
-                f"📝 **Name:** {alarm_name}\n"
-                f"⏰ **Time:** {alarm_time}\n"
+                f"🎉 **Your Alarm Set Successfully!**\n\n"
+                f"✅ **Alarm creation completed!**\n\n"
+                f"📝 **Alarm Name:** {alarm_name}\n"
+                f"⏰ **Alarm Time:** {alarm_time}\n"
                 f"🌍 **Timezone:** {Config.TIMEZONE}\n\n"
-                f"🔔 I'll send you a notification at this time every day with streak tracking!\n\n"
-                f"**Current alarms:** {len(user_alarms) + 1}/{Config.MAX_ALARMS_PER_USER}",
+                f"🔔 **What happens next:**\n"
+                f"• I'll send you a notification at {alarm_time} every day\n"
+                f"• You can track your completion streak\n"
+                f"• Use '📋 List Alarms' to manage your alarms\n\n"
+                f"📊 **Your alarms:** {len(user_alarms) + 1}/{Config.MAX_ALARMS_PER_USER}",
                 parse_mode='Markdown',
                 reply_markup=self.reply_markup
             )
