@@ -77,6 +77,18 @@ class AlarmManager:
     async def send_alarm_notification(self, user_id: int, alarm_time: str):
         """Send alarm notification to user"""
         try:
+            # Get user and find the alarm name
+            user = db_manager.get_user(user_id)
+            current_streak = user.get('streak', 0) if user else 0
+
+            # Find the alarm name
+            alarm_name = f"Alarm {alarm_time}"  # Default name
+            if user and user.get('alarms'):
+                for alarm in user['alarms']:
+                    if alarm['time'] == alarm_time:
+                        alarm_name = alarm.get('name', f"Alarm {alarm_time}")
+                        break
+
             # Create inline keyboard for response
             keyboard = [
                 [
@@ -85,15 +97,12 @@ class AlarmManager:
                 ]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            # Get user's current streak
-            user = db_manager.get_user(user_id)
-            current_streak = user.get('streak', 0) if user else 0
-            
+
             message = (
                 f"⏰ **Alarm Notification!**\n\n"
-                f"Time: {alarm_time}\n"
-                f"Current streak: {current_streak} 🔥\n\n"
+                f"📝 **{alarm_name}**\n"
+                f"⏰ Time: {alarm_time}\n"
+                f"🔥 Current streak: {current_streak}\n\n"
                 f"Did you complete your task?"
             )
             

@@ -54,27 +54,28 @@ class DatabaseManager:
             {"$set": {"last_activity": datetime.now(self.timezone)}}
         )
     
-    def add_alarm(self, user_id: int, alarm_time: str) -> bool:
+    def add_alarm(self, user_id: int, alarm_time: str, alarm_name: str = None) -> bool:
         """Add an alarm for a user"""
         user = self.get_user(user_id)
         if not user:
             return False
-        
+
         # Check if user already has maximum alarms
         if len(user.get("alarms", [])) >= Config.MAX_ALARMS_PER_USER:
             return False
-        
+
         # Check if alarm time already exists
         existing_alarms = [alarm["time"] for alarm in user.get("alarms", [])]
         if alarm_time in existing_alarms:
             return False
-        
+
         # Add the alarm
         alarm_data = {
             "time": alarm_time,
+            "name": alarm_name or f"Alarm {alarm_time}",
             "created_at": datetime.now(self.timezone)
         }
-        
+
         self.users.update_one(
             {"user_id": user_id},
             {"$push": {"alarms": alarm_data}}

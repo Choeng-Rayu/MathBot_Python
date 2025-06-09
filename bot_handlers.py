@@ -20,10 +20,13 @@ class BotHandlers:
             ['📋 List Alarms', '🤖 AI Chat']
         ]
         self.reply_markup = ReplyKeyboardMarkup(
-            self.main_keyboard, 
-            resize_keyboard=True, 
+            self.main_keyboard,
+            resize_keyboard=True,
             one_time_keyboard=False
         )
+
+        # User conversation states for alarm creation
+        self.user_states = {}  # {user_id: {'state': 'waiting_for_name', 'data': {...}}}
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command"""
@@ -69,10 +72,15 @@ class BotHandlers:
         """Handle text messages"""
         user_id = update.effective_user.id
         text = update.message.text
-        
+
         # Update last activity
         db_manager.update_last_activity(user_id)
-        
+
+        # Check if user is in a conversation state (alarm creation)
+        if user_id in self.user_states:
+            await self.handle_conversation_state(update, context, text)
+            return
+
         if text == '🧮 Solve Math':
             await self.prompt_math_expression(update, context)
         elif text == '📈 Solve Function':
@@ -96,6 +104,88 @@ class BotHandlers:
             else:
                 # Handle with AI assistant for natural conversation
                 await self.handle_ai_conversation(update, context, text)
+
+    async def handle_conversation_state(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+        """Handle conversation states for alarm creation"""
+        user_id = update.effective_user.id
+        user_state = self.user_states.get(user_id)
+
+        if not user_state:
+            return
+
+        # Check for cancellation
+        if text.lower() in ['cancel', 'stop', 'exit', '/cancel']:
+            del self.user_states[user_id]
+            await update.message.reply_text(
+                "❌ **Alarm creation cancelled.**\n\n"
+                "You can start again anytime using '⏰ Set Alarm'.",
+                parse_mode='Markdown',
+                reply_markup=self.reply_markup
+            )
+            return
+
+        state = user_state['state']
+
+        if state == 'waiting_for_alarm_name':
+            # User provided alarm name, now ask for time
+            alarm_name = text.strip()
+
+            if len(alarm_name) > 50:
+                await update.message.reply_text(
+                    "❌ **Alarm name too long!**\n\n"
+                    "Please enter a shorter name (maximum 50 characters).",
+                    parse_mode='Markdown'
+                )
+                return
+
+            if not alarm_name:
+                await update.message.reply_text(
+                    "❌ **Please enter a valid alarm name!**\n\n"
+                    "The name cannot be empty.",
+                    parse_mode='Markdown'
+                )
+                return
+
+            # Update state to waiting for time
+            self.user_states[user_id] = {
+                'state': 'waiting_for_alarm_time',
+                'data': {'alarm_name': alarm_name}
+            }
+
+            await update.message.reply_text(
+                f"⏰ **Set New Alarm - Step 2/2**\n\n"
+                f"✅ **Alarm Name:** {alarm_name}\n\n"
+                f"Now, send me the time for your alarm in HH:MM format.\n\n"
+                f"**Examples:**\n"
+                f"• `08:30` (8:30 AM)\n"
+                f"• `14:15` (2:15 PM)\n"
+                f"• `22:00` (10:00 PM)\n\n"
+                f"**Timezone:** {Config.TIMEZONE}\n\n"
+                f"⏰ **Please enter the time for your alarm:**\n\n"
+                f"💡 *Type 'cancel' to stop creating the alarm.*",
+                parse_mode='Markdown'
+            )
+
+        elif state == 'waiting_for_alarm_time':
+            # User provided alarm time, complete the alarm creation
+            alarm_time = text.strip()
+            alarm_name = user_state['data']['alarm_name']
+
+            # Clear user state first
+            del self.user_states[user_id]
+
+            # Validate time format
+            if not self.is_alarm_time(alarm_time):
+                await update.message.reply_text(
+                    "❌ **Invalid time format!**\n\n"
+                    "Please use HH:MM format (e.g., 08:30, 14:15)\n\n"
+                    "Use '⏰ Set Alarm' to try again.",
+                    parse_mode='Markdown'
+                )
+                return
+
+            # Complete alarm creation
+            await self.complete_alarm_creation(update, context, alarm_name, alarm_time)
 
     async def handle_ai_conversation(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Handle conversation with AI assistant"""
@@ -370,10 +460,10 @@ class BotHandlers:
             )
     
     async def prompt_set_alarm(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Prompt user to set an alarm"""
+        """Prompt user to set an alarm - Step 1: Ask for alarm name"""
         user_id = update.effective_user.id
         user_alarms = db_manager.get_user_alarms(user_id)
-        
+
         if len(user_alarms) >= Config.MAX_ALARMS_PER_USER:
             await update.message.reply_text(
                 f"⚠️ **Alarm Limit Reached**\n\n"
@@ -382,19 +472,80 @@ class BotHandlers:
                 parse_mode='Markdown'
             )
             return
-        
+
+        # Set user state to waiting for alarm name
+        self.user_states[user_id] = {
+            'state': 'waiting_for_alarm_name',
+            'data': {}
+        }
+
         await update.message.reply_text(
-            "⏰ **Set New Alarm**\n\n"
-            "Send me the time for your alarm in HH:MM format.\n\n"
+            "⏰ **Set New Alarm - Step 1/2**\n\n"
+            "First, give your alarm a name to help you remember what it's for.\n\n"
             "**Examples:**\n"
-            "• `08:30` (8:30 AM)\n"
-            "• `14:15` (2:15 PM)\n"
-            "• `22:00` (10:00 PM)\n\n"
-            f"**Timezone:** {Config.TIMEZONE}\n"
-            f"**Current alarms:** {len(user_alarms)}/{Config.MAX_ALARMS_PER_USER}",
+            "• `Morning Exercise`\n"
+            "• `Study Time`\n"
+            "• `Take Medicine`\n"
+            "• `Call Mom`\n"
+            "• `Drink Water`\n\n"
+            "📝 **Please enter a name for your alarm:**\n\n"
+            "💡 *Type 'cancel' anytime to stop creating the alarm.*",
             parse_mode='Markdown'
         )
 
+    async def complete_alarm_creation(self, update: Update, context: ContextTypes.DEFAULT_TYPE, alarm_name: str, alarm_time: str):
+        """Complete the alarm creation process"""
+        user_id = update.effective_user.id
+
+        # Check if user already has maximum alarms
+        user_alarms = db_manager.get_user_alarms(user_id)
+        if len(user_alarms) >= Config.MAX_ALARMS_PER_USER:
+            await update.message.reply_text(
+                f"❌ **Alarm Set Not Completed!**\n\n"
+                f"You've reached the maximum limit of {Config.MAX_ALARMS_PER_USER} alarms.\n"
+                "Please remove some alarms before adding new ones.",
+                parse_mode='Markdown',
+                reply_markup=self.reply_markup
+            )
+            return
+
+        # Check if alarm time already exists
+        existing_times = [alarm['time'] for alarm in user_alarms]
+        if alarm_time in existing_times:
+            await update.message.reply_text(
+                f"❌ **Alarm Set Not Completed!**\n\n"
+                f"You already have an alarm set for {alarm_time}.\n"
+                "Please choose a different time.",
+                parse_mode='Markdown',
+                reply_markup=self.reply_markup
+            )
+            return
+
+        # Add alarm to database
+        success = db_manager.add_alarm(user_id, alarm_time, alarm_name)
+
+        if success:
+            # Schedule the alarm
+            if alarm_manager:
+                alarm_manager.schedule_alarm(user_id, alarm_time)
+
+            await update.message.reply_text(
+                f"✅ **Alarm Set Successfully!**\n\n"
+                f"📝 **Name:** {alarm_name}\n"
+                f"⏰ **Time:** {alarm_time}\n"
+                f"🌍 **Timezone:** {Config.TIMEZONE}\n\n"
+                f"🔔 I'll send you a notification at this time every day with streak tracking!\n\n"
+                f"**Current alarms:** {len(user_alarms) + 1}/{Config.MAX_ALARMS_PER_USER}",
+                parse_mode='Markdown',
+                reply_markup=self.reply_markup
+            )
+        else:
+            await update.message.reply_text(
+                f"❌ **Alarm Set Not Completed!**\n\n"
+                f"There was an error creating your alarm. Please try again.",
+                parse_mode='Markdown',
+                reply_markup=self.reply_markup
+            )
 
     async def add_alarm(self, update: Update, context: ContextTypes.DEFAULT_TYPE, alarm_time: str):
         """Add a new alarm"""
@@ -460,18 +611,19 @@ class BotHandlers:
 
         for i, alarm in enumerate(user_alarms):
             alarm_time = alarm['time']
+            alarm_name = alarm.get('name', f'Alarm {alarm_time}')
             created_date = alarm.get('created_at', 'Unknown')
             if hasattr(created_date, 'strftime'):
                 created_str = created_date.strftime('%Y-%m-%d')
             else:
                 created_str = 'Unknown'
 
-            alarm_list += f"⏰ **{alarm_time}** (created: {created_str})\n"
+            alarm_list += f"📝 **{alarm_name}**\n⏰ Time: {alarm_time} (created: {created_str})\n\n"
 
             # Add delete button
             keyboard.append([
                 InlineKeyboardButton(
-                    f"🗑️ Delete {alarm_time}",
+                    f"🗑️ Delete {alarm_name}",
                     callback_data=f"delete_alarm_{i}"
                 )
             ])
