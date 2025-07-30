@@ -6,13 +6,13 @@ services:
     repo: YOUR_GITHUB_USERNAME/MathBot_Python
     branch: main
     deploy_on_push: true
-  
+
   # Build configuration
-  build_command: pip install -r requirements.txt
-  
+  build_command: pip install --upgrade pip && pip install -r requirements.txt
+
   # Runtime configuration
   run_command: python main.py
-  
+
   # Environment configuration
   environment_slug: python
   instance_count: 1

@@ -1,5 +1,5 @@
-# Use Python 3.11 slim image for better performance
-FROM python:3.11-slim
+# Use Python 3.11 slim image for better performance and compatibility
+FROM python:3.11.9-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -16,6 +16,7 @@ RUN apt-get update \
         g++ \
         libffi-dev \
         libssl-dev \
+        curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
