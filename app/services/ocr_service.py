@@ -10,6 +10,7 @@ from typing import Optional, Tuple
 from PIL import Image
 import tempfile
 import aiofiles
+
 from config import Config
 
 # Try to import Google Cloud Vision - make it optional

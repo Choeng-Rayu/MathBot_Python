@@ -1,16 +1,19 @@
 import re
+import os
 from datetime import datetime
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from database import db_manager
-from math_solver import math_solver
-from function_analyzer import function_analyzer
-from pdf_generator import pdf_generator
-from alarm_manager import alarm_manager
-from ai_assistant import ai_assistant
-from ocr_service import ocr_service
+
 from config import Config
-import os
+from app.models.database import db_manager
+from app.services.math_solver import math_solver
+from app.services.pdf_generator import pdf_generator
+from app.services.ai_assistant import ai_assistant
+from app.services.ocr_service import ocr_service
+import app.services.alarm_manager as alarm_module
+
+# Import function_analyzer
+from app.services.function_analyzer import function_analyzer
 
 class BotHandlers:
     def __init__(self):
@@ -642,8 +645,8 @@ class BotHandlers:
 
         if success:
             # Schedule the alarm
-            if alarm_manager:
-                alarm_manager.schedule_alarm(user_id, alarm_time)
+            if alarm_module.alarm_manager:
+                alarm_module.alarm_manager.schedule_alarm(user_id, alarm_time)
 
             await update.message.reply_text(
                 f"🎉 **Your Alarm Set Successfully!**\n\n"
@@ -685,8 +688,8 @@ class BotHandlers:
 
         if success:
             # Schedule the alarm
-            if alarm_manager:
-                alarm_manager.schedule_alarm(user_id, alarm_time)
+            if alarm_module.alarm_manager:
+                alarm_module.alarm_manager.schedule_alarm(user_id, alarm_time)
 
             await update.message.reply_text(
                 f"✅ **Alarm Set Successfully!**\n\n"
@@ -852,8 +855,8 @@ class BotHandlers:
 
                 if success:
                     # Remove from scheduler
-                    if alarm_manager:
-                        alarm_manager.remove_scheduled_alarm(user_id, alarm_time)
+                    if alarm_module.alarm_manager:
+                        alarm_module.alarm_manager.remove_scheduled_alarm(user_id, alarm_time)
 
                     await update.callback_query.edit_message_text(
                         f"✅ **Alarm Deleted**\n\n"
@@ -880,8 +883,8 @@ class BotHandlers:
 
     async def handle_alarm_response(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Handle alarm notification response"""
-        if alarm_manager:
-            response = await alarm_manager.handle_alarm_response(
+        if alarm_module.alarm_manager:
+            response = await alarm_module.alarm_manager.handle_alarm_response(
                 callback_data,
                 update.callback_query.message.message_id
             )

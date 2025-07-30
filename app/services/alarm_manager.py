@@ -5,8 +5,9 @@ from apscheduler.triggers.cron import CronTrigger
 import pytz
 from typing import Dict, List
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
-from database import db_manager
+
 from config import Config
+from app.models.database import db_manager
 
 class AlarmManager:
     def __init__(self, bot_token: str):

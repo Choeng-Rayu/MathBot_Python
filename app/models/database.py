@@ -4,6 +4,7 @@ from typing import List, Dict, Optional
 from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
 import pytz
+
 from config import Config
 
 class DatabaseManager:

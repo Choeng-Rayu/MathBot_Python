@@ -2,8 +2,9 @@ import asyncio
 import aiohttp
 import json
 from typing import List, Dict, Optional
+
 from config import Config
-from database import db_manager
+from app.models.database import db_manager
 
 class AIAssistant:
     def __init__(self):

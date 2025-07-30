@@ -10,6 +10,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 from reportlab.lib.units import inch
 import io
 from PIL import Image as PILImage
+
 from config import Config
 
 class PDFGenerator:
