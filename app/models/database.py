@@ -38,7 +38,12 @@ class DatabaseManager:
                 "alarms": [],
                 "streak": 0,
                 "last_activity": datetime.now(self.timezone),
-                "created_at": datetime.now(self.timezone)
+                "created_at": datetime.now(self.timezone),
+                "preferences": {
+                    "ai_model": "auto",  # auto, gemini, deepseek
+                    "language": "en",
+                    "notifications": True
+                }
             }
             self.users.insert_one(user_data)
             return True
@@ -123,7 +128,55 @@ class DatabaseManager:
     def get_all_users_with_alarms(self) -> List[Dict]:
         """Get all users who have alarms set"""
         return list(self.users.find({"alarms": {"$ne": []}}))
-    
+
+    def get_user_preference(self, user_id: int, preference_key: str, default_value=None):
+        """Get a specific user preference"""
+        try:
+            user = self.get_user(user_id)
+            if user and "preferences" in user:
+                return user["preferences"].get(preference_key, default_value)
+            return default_value
+        except Exception as e:
+            print(f"Error getting user preference: {e}")
+            return default_value
+
+    def update_user_preference(self, user_id: int, preference_key: str, value) -> bool:
+        """Update a specific user preference"""
+        try:
+            # Ensure user exists
+            if not self.get_user(user_id):
+                return False
+
+            # Update the preference
+            result = self.users.update_one(
+                {"user_id": user_id},
+                {"$set": {f"preferences.{preference_key}": value}}
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"Error updating user preference: {e}")
+            return False
+
+    def get_user_preferences(self, user_id: int) -> Dict:
+        """Get all user preferences"""
+        try:
+            user = self.get_user(user_id)
+            if user and "preferences" in user:
+                return user["preferences"]
+            # Return default preferences if not found
+            return {
+                "ai_model": "auto",
+                "language": "en",
+                "notifications": True
+            }
+        except Exception as e:
+            print(f"Error getting user preferences: {e}")
+            return {
+                "ai_model": "auto",
+                "language": "en",
+                "notifications": True
+            }
+
     def close(self):
         """Close database connection"""
         self.client.close()

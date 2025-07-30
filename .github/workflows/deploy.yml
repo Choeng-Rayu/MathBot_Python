@@ -63,7 +63,11 @@ jobs:
       run: |
         # Wait for deployment to be ready
         sleep 60
-        
+
         # Set webhook using the deployed app URL
-        curl -X GET "https://mathbot-telegram-xxxxx.ondigitalocean.app/set_webhook" \
+        curl -X GET "https://hybridcoffee-za9sy.ondigitalocean.app/set_webhook" \
+          -H "Content-Type: application/json"
+
+        # Test health endpoint
+        curl -X GET "https://hybridcoffee-za9sy.ondigitalocean.app/health" \
           -H "Content-Type: application/json"

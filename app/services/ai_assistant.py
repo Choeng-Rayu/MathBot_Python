@@ -1,15 +1,26 @@
 import asyncio
 import aiohttp
 import json
+import logging
 from typing import List, Dict, Optional
 
 from config import Config
 from app.models.database import db_manager
 
+logger = logging.getLogger(__name__)
+
 class AIAssistant:
     def __init__(self):
-        self.api_key = Config.DEEPSEEK_API_KEY
-        self.api_url = Config.DEEPSEEK_API_URL
+        # DeepSeek configuration
+        self.deepseek_api_key = Config.DEEPSEEK_API_KEY
+        self.deepseek_api_url = Config.DEEPSEEK_API_URL
+
+        # Google Gemini configuration
+        self.gemini_api_key = Config.GOOGLE_GEMINI_API_KEY
+        self.gemini_api_url = Config.GOOGLE_GEMINI_API_URL
+
+        # AI model preference
+        self.ai_model = Config.AI_MODEL
         
         # Personal information about the bot creator
         self.creator_info = {
@@ -74,63 +85,121 @@ IMPORTANT GUIDELINES:
 Remember: You are here to assist users with mathematics, learning, and productivity while representing your creator's dedication to helping others for free."""
 
     async def get_ai_response(self, user_message: str, user_id: int, conversation_history: List[Dict] = None) -> str:
-        """Get AI response from DeepSeek API"""
+        """Get AI response with automatic fallback between Gemini and DeepSeek"""
         try:
             # Prepare conversation history
             messages = [{"role": "system", "content": self.system_prompt}]
-            
+
             # Add conversation history if available
             if conversation_history:
                 messages.extend(conversation_history[-10:])  # Keep last 10 messages for context
-            
+
             # Add current user message
             messages.append({"role": "user", "content": user_message})
-            
-            # Prepare request payload
-            payload = {
-                "model": "deepseek-chat",
-                "messages": messages,
-                "max_tokens": 1000,
-                "temperature": 0.7,
-                "stream": False
-            }
-            
+
+            # Try AI with automatic fallback
+            ai_response = await self.get_ai_response_with_fallback(messages, user_id)
+
+            # Store conversation in database
+            await self.store_conversation(user_id, user_message, ai_response)
+
+            return ai_response
+
+        except Exception as e:
+            logger.error(f"Error in get_ai_response: {e}")
+            return self.get_fallback_response(user_message)
+
+    async def get_ai_response_with_fallback(self, messages: List[Dict], user_id: int) -> str:
+        """Get AI response with automatic fallback between models"""
+
+        # Get user's preferred AI model
+        user_ai_preference = db_manager.get_user_preference(user_id, "ai_model", "auto")
+
+        # Determine which AI to try first based on user preference
+        if user_ai_preference == "gemini" and self.gemini_api_key:
+            primary_ai = "gemini"
+            fallback_ai = "deepseek"
+        elif user_ai_preference == "deepseek" and self.deepseek_api_key:
+            primary_ai = "deepseek"
+            fallback_ai = "gemini"
+        else:  # auto mode or fallback
+            if self.gemini_api_key:
+                primary_ai = "gemini"
+                fallback_ai = "deepseek"
+            else:
+                primary_ai = "deepseek"
+                fallback_ai = "gemini"
+
+        # Try primary AI
+        logger.info(f"Trying {primary_ai} AI for user {user_id}")
+
+        if primary_ai == "gemini":
+            response = await self.call_gemini_api(messages, user_id)
+        else:
+            response = await self.call_deepseek_api(messages, user_id)
+
+        if response:
+            # Get user preference to determine if they want to see AI model info
+            ai_icons = {"gemini": "🧠", "deepseek": "🔬"}
+            icon = ai_icons.get(primary_ai, "🤖")
+            return f"{icon} **{primary_ai.title()} AI**: {response}"
+
+        # Try fallback AI
+        logger.info(f"Primary AI failed, trying {fallback_ai} AI for user {user_id}")
+
+        if fallback_ai == "gemini" and self.gemini_api_key:
+            response = await self.call_gemini_api(messages, user_id)
+        elif fallback_ai == "deepseek" and self.deepseek_api_key:
+            response = await self.call_deepseek_api(messages, user_id)
+
+        if response:
+            ai_icons = {"gemini": "🧠", "deepseek": "🔬"}
+            icon = ai_icons.get(fallback_ai, "🤖")
+            return f"{icon} **{fallback_ai.title()} AI** (fallback): {response}"
+
+        # Both AIs failed
+        return self.get_fallback_response("")
+
+    async def call_deepseek_api(self, messages: List[Dict], user_id: int) -> Optional[str]:
+        """Call DeepSeek API"""
+        if not self.deepseek_api_key:
+            logger.warning("DeepSeek API key not configured")
+            return None
+
+        try:
             headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
+                'Authorization': f'Bearer {self.deepseek_api_key}',
+                'Content-Type': 'application/json'
             }
-            
-            # Make API request
+
+            data = {
+                'model': 'deepseek-chat',
+                'messages': messages,
+                'temperature': 0.7,
+                'max_tokens': 1000
+            }
+
             async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    self.api_url,
-                    json=payload,
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=30)
-                ) as response:
-                    
+                async with session.post(self.deepseek_api_url, headers=headers, json=data, timeout=30) as response:
                     if response.status == 200:
                         result = await response.json()
-                        ai_response = result["choices"][0]["message"]["content"]
-                        
-                        # Store conversation in database
-                        await self.store_conversation(user_id, user_message, ai_response)
-                        
-                        return ai_response
+                        if 'choices' in result and len(result['choices']) > 0:
+                            response_text = result['choices'][0]['message']['content'].strip()
+                            logger.info(f"DeepSeek AI response received for user {user_id}")
+                            return response_text
                     else:
                         error_text = await response.text()
-                        print(f"DeepSeek API error {response.status}: {error_text}")
-                        return self.get_fallback_response(user_message)
-                        
+                        logger.error(f"DeepSeek API error {response.status}: {error_text}")
+                        return None
+
         except asyncio.TimeoutError:
-            print("DeepSeek API timeout")
-            return "⏰ Sorry, I'm taking a bit longer to respond. Please try again!"
-            
+            logger.error("DeepSeek API timeout")
+            return None
         except Exception as e:
-            print(f"Error calling DeepSeek API: {e}")
-            return self.get_fallback_response(user_message)
-    
-    def get_fallback_response(self, user_message: str) -> str:
+            logger.error(f"DeepSeek API error: {e}")
+            return None
+
+    def get_fallback_response(self, user_message: str = "") -> str:
         """Provide fallback responses when AI is unavailable"""
         message_lower = user_message.lower()
         
@@ -282,6 +351,87 @@ Remember: You are here to assist users with mathematics, learning, and productiv
         import re
         time_pattern = r'^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
         return bool(re.match(time_pattern, text.strip()))
+
+    async def call_gemini_api(self, messages: List[Dict], user_id: int) -> Optional[str]:
+        """Call Google Gemini API"""
+        if not self.gemini_api_key:
+            logger.warning("Gemini API key not configured")
+            return None
+
+        try:
+            # Convert messages to Gemini format
+            prompt = self._convert_messages_to_gemini_prompt(messages)
+
+            headers = {
+                'Content-Type': 'application/json',
+            }
+
+            # Gemini API uses query parameter for API key
+            url = f"{self.gemini_api_url}?key={self.gemini_api_key}"
+
+            data = {
+                "contents": [
+                    {
+                        "parts": [
+                            {
+                                "text": prompt
+                            }
+                        ]
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": 0.7,
+                    "topK": 40,
+                    "topP": 0.95,
+                    "maxOutputTokens": 1024,
+                }
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, json=data, timeout=30) as response:
+                    if response.status == 200:
+                        result = await response.json()
+
+                        # Extract response from Gemini format
+                        if 'candidates' in result and len(result['candidates']) > 0:
+                            candidate = result['candidates'][0]
+                            if 'content' in candidate and 'parts' in candidate['content']:
+                                parts = candidate['content']['parts']
+                                if len(parts) > 0 and 'text' in parts[0]:
+                                    response_text = parts[0]['text'].strip()
+                                    logger.info(f"Gemini AI response received for user {user_id}")
+                                    return response_text
+
+                        logger.warning(f"Unexpected Gemini response format: {result}")
+                        return None
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"Gemini API error {response.status}: {error_text}")
+                        return None
+
+        except asyncio.TimeoutError:
+            logger.error("Gemini API timeout")
+            return None
+        except Exception as e:
+            logger.error(f"Gemini API error: {e}")
+            return None
+
+    def _convert_messages_to_gemini_prompt(self, messages: List[Dict]) -> str:
+        """Convert OpenAI-style messages to Gemini prompt format"""
+        prompt_parts = []
+
+        for message in messages:
+            role = message.get('role', '')
+            content = message.get('content', '')
+
+            if role == 'system':
+                prompt_parts.append(f"System: {content}")
+            elif role == 'user':
+                prompt_parts.append(f"User: {content}")
+            elif role == 'assistant':
+                prompt_parts.append(f"Assistant: {content}")
+
+        return "\n\n".join(prompt_parts)
 
 # Global AI assistant instance
 ai_assistant = AIAssistant()

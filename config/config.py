@@ -13,9 +13,16 @@ class Config:
     WEBHOOK_URL = os.getenv("WEBHOOK_URL")
     WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")  # For webhook security
 
-    # DeepSeek AI Configuration
+    # AI Configuration
     DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
     DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
+
+    # Google Gemini AI Configuration
+    GOOGLE_GEMINI_API_KEY = os.getenv("GOOGLE_GEMINI_API_KEY")
+    GOOGLE_GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+
+    # AI Model Selection (gemini, deepseek, or auto)
+    AI_MODEL = os.getenv("AI_MODEL", "auto")  # auto will try gemini first, then deepseek
 
     # Google Cloud Vision API Configuration
     GOOGLE_CLOUD_CREDENTIALS_PATH = os.getenv("GOOGLE_CLOUD_CREDENTIALS_PATH")
@@ -56,9 +63,13 @@ class Config:
         """Validate that all required environment variables are set"""
         required_vars = [
             "TELEGRAM_BOT_TOKEN",
-            "MONGODB_URI",
-            "DEEPSEEK_API_KEY"
+            "MONGODB_URI"
         ]
+
+        # At least one AI API key is required
+        ai_keys = [cls.DEEPSEEK_API_KEY, cls.GOOGLE_GEMINI_API_KEY]
+        if not any(ai_keys):
+            required_vars.extend(["DEEPSEEK_API_KEY or GOOGLE_GEMINI_API_KEY"])
 
         # WEBHOOK_URL is only required in production
         if cls.ENVIRONMENT == "production":
@@ -66,6 +77,8 @@ class Config:
 
         missing_vars = []
         for var in required_vars:
+            if "or" in var:  # Handle AI key requirement
+                continue
             if not getattr(cls, var):
                 missing_vars.append(var)
 
@@ -76,6 +89,14 @@ class Config:
         logger.info(f"Environment: {cls.ENVIRONMENT}")
         logger.info(f"Port: {cls.PORT}")
         logger.info(f"Host: {cls.HOST}")
+        logger.info(f"AI Model: {cls.AI_MODEL}")
+
+        # Log available AI services
+        if cls.DEEPSEEK_API_KEY:
+            logger.info("✅ DeepSeek AI available")
+        if cls.GOOGLE_GEMINI_API_KEY:
+            logger.info("✅ Google Gemini AI available")
+
         if cls.WEBHOOK_URL:
             logger.info(f"Webhook URL: {cls.WEBHOOK_URL}")
 

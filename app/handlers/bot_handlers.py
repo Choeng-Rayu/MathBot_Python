@@ -20,7 +20,8 @@ class BotHandlers:
         # Define custom keyboard
         self.main_keyboard = [
             ['🧮 Solve Math', '📈 Solve Function'],
-            ['⏰ Set Alarm', '📊 My Stats'],
+            ['🤖 AI Chat', '⏰ Set Alarm'],
+            ['📊 My Stats', '⚙️ Settings'],
             ['📋 List Alarms', '🤖 AI Chat']
         ]
         self.reply_markup = ReplyKeyboardMarkup(
@@ -97,6 +98,8 @@ class BotHandlers:
             await self.list_user_alarms(update, context)
         elif text == '🤖 AI Chat':
             await self.prompt_ai_chat(update, context)
+        elif text == '⚙️ Settings':
+            await self.show_settings(update, context)
         else:
             # Check if it's a function first (higher priority than math expressions)
             if self.is_function_expression(text):
@@ -838,6 +841,11 @@ class BotHandlers:
             await self.handle_delete_alarm(update, context, callback_data)
         elif callback_data.startswith('alarm_done_') or callback_data.startswith('alarm_skip_'):
             await self.handle_alarm_response(update, context, callback_data)
+        elif callback_data.startswith('ai_model_'):
+            ai_model = callback_data.replace('ai_model_', '')
+            await self.handle_ai_model_selection(update, context, ai_model)
+        elif callback_data == 'back_to_menu':
+            await self.show_main_menu(update, context)
 
     async def handle_delete_alarm(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Handle alarm deletion"""
@@ -898,6 +906,147 @@ class BotHandlers:
                 "❌ Alarm system not available.",
                 parse_mode='Markdown'
             )
+
+    async def show_settings(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show user settings menu"""
+        user_id = update.effective_user.id
+
+        # Get current user preferences
+        preferences = db_manager.get_user_preferences(user_id)
+        current_ai_model = preferences.get("ai_model", "auto")
+
+        # Create AI model display text
+        ai_model_display = {
+            "auto": "🤖 Auto (Smart Fallback)",
+            "gemini": "🧠 Google Gemini",
+            "deepseek": "🔬 DeepSeek AI"
+        }
+
+        settings_text = f"""⚙️ **Settings**
+
+🤖 **AI Model**: {ai_model_display.get(current_ai_model, current_ai_model)}
+
+Choose your preferred AI model for mathematical assistance:
+
+• **Auto**: Tries Gemini first, falls back to DeepSeek
+• **Gemini**: Fast, conversational responses
+• **DeepSeek**: Detailed, step-by-step solutions
+
+Current selection: **{ai_model_display.get(current_ai_model, current_ai_model)}**"""
+
+        # Create inline keyboard for AI model selection
+        keyboard = [
+            [
+                InlineKeyboardButton("🤖 Auto", callback_data="ai_model_auto"),
+                InlineKeyboardButton("🧠 Gemini", callback_data="ai_model_gemini")
+            ],
+            [
+                InlineKeyboardButton("🔬 DeepSeek", callback_data="ai_model_deepseek")
+            ],
+            [
+                InlineKeyboardButton("🔙 Back to Menu", callback_data="back_to_menu")
+            ]
+        ]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await update.message.reply_text(
+            settings_text,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+
+    async def handle_ai_model_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE, ai_model: str):
+        """Handle AI model selection"""
+        user_id = update.effective_user.id
+
+        # Update user preference
+        success = db_manager.update_user_preference(user_id, "ai_model", ai_model)
+
+        if success:
+            ai_model_names = {
+                "auto": "🤖 Auto (Smart Fallback)",
+                "gemini": "🧠 Google Gemini",
+                "deepseek": "🔬 DeepSeek AI"
+            }
+
+            selected_name = ai_model_names.get(ai_model, ai_model)
+
+            # Create updated settings display
+            preferences = db_manager.get_user_preferences(user_id)
+            current_ai_model = preferences.get("ai_model", "auto")
+
+            settings_text = f"""⚙️ **Settings**
+
+✅ **AI Model Updated!**
+
+🤖 **Current AI Model**: {ai_model_names.get(current_ai_model, current_ai_model)}
+
+Choose your preferred AI model for mathematical assistance:
+
+• **Auto**: Tries Gemini first, falls back to DeepSeek
+• **Gemini**: Fast, conversational responses
+• **DeepSeek**: Detailed, step-by-step solutions
+
+Your selection: **{selected_name}**"""
+
+            # Create inline keyboard
+            keyboard = [
+                [
+                    InlineKeyboardButton("🤖 Auto", callback_data="ai_model_auto"),
+                    InlineKeyboardButton("🧠 Gemini", callback_data="ai_model_gemini")
+                ],
+                [
+                    InlineKeyboardButton("🔬 DeepSeek", callback_data="ai_model_deepseek")
+                ],
+                [
+                    InlineKeyboardButton("🔙 Back to Menu", callback_data="back_to_menu")
+                ]
+            ]
+
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            await update.callback_query.edit_message_text(
+                settings_text,
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+        else:
+            await update.callback_query.answer("❌ Failed to update AI model preference")
+
+    async def show_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show main menu after settings"""
+        welcome_text = """🤖 **Welcome back to MathBot!**
+
+I'm your advanced mathematical assistant powered by AI. Here's what I can help you with:
+
+🧮 **Solve Math** - Basic to advanced mathematical expressions
+📈 **Solve Function** - Function analysis and graphing
+🤖 **AI Chat** - Natural conversation about math topics
+⏰ **Set Alarm** - Time-based reminders
+📊 **My Stats** - Your mathematical journey
+⚙️ **Settings** - Customize your AI experience
+
+Just tap a button below or type your math problem directly!"""
+
+        # Create main menu keyboard
+        keyboard = ReplyKeyboardMarkup(
+            self.main_keyboard,
+            resize_keyboard=True,
+            one_time_keyboard=False
+        )
+
+        await update.callback_query.edit_message_text(
+            welcome_text,
+            parse_mode='Markdown'
+        )
+
+        # Send a new message with the keyboard
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="Choose an option:",
+            reply_markup=keyboard
+        )
 
 # Global bot handlers instance
 bot_handlers = BotHandlers()
