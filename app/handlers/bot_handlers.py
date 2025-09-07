@@ -17,12 +17,12 @@ from app.services.function_analyzer import function_analyzer
 
 class BotHandlers:
     def __init__(self):
-        # Define custom keyboard
+        # Define custom keyboard - Fixed layout without duplicates
         self.main_keyboard = [
             ['🧮 Solve Math', '📈 Solve Function'],
             ['🤖 AI Chat', '⏰ Set Alarm'],
-            ['📊 My Stats', '⚙️ Settings'],
-            ['📋 List Alarms', '🤖 AI Chat']
+            ['📊 My Stats', '📋 List Alarms'],
+            ['⚙️ Settings', '🔄 Reset Chat']
         ]
         self.reply_markup = ReplyKeyboardMarkup(
             self.main_keyboard,
@@ -100,6 +100,8 @@ class BotHandlers:
             await self.prompt_ai_chat(update, context)
         elif text == '⚙️ Settings':
             await self.show_settings(update, context)
+        elif text == '🔄 Reset Chat':
+            await self.reset_chat_context(update, context)
         else:
             # Check if it's a function first (higher priority than math expressions)
             if self.is_function_expression(text):
@@ -308,7 +310,7 @@ class BotHandlers:
             await self.complete_alarm_creation(update, context, alarm_name, alarm_time)
 
     async def handle_ai_conversation(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
-        """Handle conversation with AI assistant"""
+        """Handle conversation with AI assistant - improved error handling"""
         user_id = update.effective_user.id
 
         try:
@@ -318,25 +320,51 @@ class BotHandlers:
             # Get conversation history
             conversation_history = await ai_assistant.get_conversation_history(user_id)
 
-            # Get AI response
+            # Get AI response with timeout
             ai_response = await ai_assistant.get_ai_response(text, user_id, conversation_history)
 
-            # Send response
-            await update.message.reply_text(
-                ai_response,
-                parse_mode='Markdown',
-                reply_markup=self.reply_markup
-            )
+            # Check if AI response is valid
+            if ai_response and ai_response.strip():
+                # Send response with error handling for markdown
+                try:
+                    await update.message.reply_text(
+                        ai_response,
+                        parse_mode='Markdown',
+                        reply_markup=self.reply_markup
+                    )
+                except Exception as markdown_error:
+                    # If markdown fails, send as plain text
+                    print(f"Markdown parsing failed: {markdown_error}")
+                    await update.message.reply_text(
+                        ai_response,
+                        reply_markup=self.reply_markup
+                    )
+            else:
+                # AI response is empty or invalid
+                fallback_response = ai_assistant.get_fallback_response(text)
+                await update.message.reply_text(
+                    fallback_response,
+                    parse_mode='Markdown',
+                    reply_markup=self.reply_markup
+                )
 
         except Exception as e:
             print(f"Error in AI conversation: {e}")
-            # Fallback response
-            fallback_response = ai_assistant.get_fallback_response(text)
-            await update.message.reply_text(
-                fallback_response,
-                parse_mode='Markdown',
-                reply_markup=self.reply_markup
-            )
+            # Enhanced fallback response
+            try:
+                fallback_response = ai_assistant.get_fallback_response(text)
+                await update.message.reply_text(
+                    fallback_response,
+                    parse_mode='Markdown',
+                    reply_markup=self.reply_markup
+                )
+            except Exception as fallback_error:
+                print(f"Fallback response failed: {fallback_error}")
+                # Last resort - simple response
+                await update.message.reply_text(
+                    "🤖 I'm experiencing some difficulties right now. Please try again in a moment, or use one of the buttons below for specific features.",
+                    reply_markup=self.reply_markup
+                )
 
     async def prompt_ai_chat(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Prompt user to start AI conversation"""
@@ -367,14 +395,49 @@ class BotHandlers:
         )
 
     def is_math_expression(self, text: str) -> bool:
-        """Check if text looks like a math expression"""
-        math_patterns = [
+        """Check if text looks like a math expression - improved detection"""
+        # Skip very short text or pure words/questions
+        if len(text.strip()) < 2:
+            return False
+        
+        # Skip if it's clearly a question or conversation
+        question_words = ['what', 'how', 'why', 'when', 'where', 'who', 'can', 'could', 'would', 'should', 'help', 'tell', 'explain']
+        if any(word in text.lower() for word in question_words):
+            return False
+        
+        # Skip if it contains too many words (likely conversation)
+        words = text.split()
+        if len(words) > 10:
+            return False
+        
+        # Strong math indicators
+        strong_math_patterns = [
+            r'\d+\s*[\+\-\*/\^]\s*\d+',  # Numbers with operators: 2+3, 5*6
+            r'(sin|cos|tan|log|ln|sqrt|exp|abs)\s*\(',  # Functions with parentheses
+            r'\d+!',  # Factorials: 5!
+            r'\d+\^\d+',  # Powers: 2^3
+            r'pi\s*[\+\-\*/]|e\s*[\+\-\*/]',  # Constants with operators
+        ]
+        
+        # If it has strong math indicators, it's likely math
+        if any(re.search(pattern, text.lower()) for pattern in strong_math_patterns):
+            return True
+        
+        # Weaker indicators - need multiple to confirm
+        weak_math_patterns = [
             r'[\+\-\*/\^]',  # Basic operators
-            r'(sin|cos|tan|log|ln|sqrt|exp|abs)',  # Functions
             r'\d+\.\d+',  # Decimals
             r'\(\d+\)',  # Numbers in parentheses
+            r'(pi|e)\b',  # Math constants
         ]
-        return any(re.search(pattern, text.lower()) for pattern in math_patterns)
+        
+        weak_matches = sum(1 for pattern in weak_math_patterns if re.search(pattern, text.lower()))
+        
+        # If multiple weak indicators and not too many words, probably math
+        if weak_matches >= 2 and len(words) <= 5:
+            return True
+        
+        return False
     
     def is_function_expression(self, text: str) -> bool:
         """Check if text looks like a function definition"""
@@ -449,52 +512,102 @@ class BotHandlers:
         )
     
     async def solve_math_expression(self, update: Update, context: ContextTypes.DEFAULT_TYPE, expression: str):
-        """Solve a mathematical expression"""
+        """Solve a mathematical expression - improved error handling"""
         user_id = update.effective_user.id
         
-        # Show typing indicator
-        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-        
-        # Solve the expression
-        success, result, steps = math_solver.solve_expression(expression)
-        
-        if success:
-            # Generate PDF
-            pdf_filename = pdf_generator.generate_math_pdf(
-                expression=expression,
-                result=result,
-                steps=steps,
-                user_id=user_id
-            )
+        try:
+            # Show typing indicator
+            await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
             
-            if pdf_filename and os.path.exists(pdf_filename):
-                # Send PDF
-                with open(pdf_filename, 'rb') as pdf_file:
-                    await context.bot.send_document(
-                        chat_id=update.effective_chat.id,
-                        document=pdf_file,
-                        filename=f"math_solution_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                        caption=f"📊 **Solution for:** `{expression}`\n**Result:** `{result}`",
-                        parse_mode='Markdown'
-                    )
-                
-                # Clean up PDF file
-                pdf_generator.cleanup_file(pdf_filename)
-            else:
-                # Fallback to text message
+            # Validate expression first
+            if not expression or len(expression.strip()) == 0:
                 await update.message.reply_text(
-                    f"🧮 **Math Solution**\n\n"
-                    f"**Expression:** `{expression}`\n"
-                    f"**Result:** `{result}`\n\n"
-                    f"**Steps:**\n```\n{steps or 'Direct calculation'}\n```",
-                    parse_mode='Markdown'
+                    "❌ **Invalid Expression**\n\n"
+                    "Please provide a valid mathematical expression to solve.",
+                    parse_mode='Markdown',
+                    reply_markup=self.reply_markup
                 )
-        else:
+                return
+            
+            # Solve the expression
+            success, result, steps = math_solver.solve_expression(expression)
+            
+            if success:
+                # Try to generate PDF first
+                try:
+                    pdf_filename = pdf_generator.generate_math_pdf(
+                        expression=expression,
+                        result=result,
+                        steps=steps,
+                        user_id=user_id
+                    )
+                    
+                    if pdf_filename and os.path.exists(pdf_filename):
+                        # Send PDF
+                        try:
+                            with open(pdf_filename, 'rb') as pdf_file:
+                                await context.bot.send_document(
+                                    chat_id=update.effective_chat.id,
+                                    document=pdf_file,
+                                    filename=f"math_solution_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                                    caption=f"📊 **Solution for:** `{expression}`\n**Result:** `{result}`",
+                                    parse_mode='Markdown'
+                                )
+                            
+                            # Clean up PDF file
+                            pdf_generator.cleanup_file(pdf_filename)
+                            return
+                            
+                        except Exception as pdf_send_error:
+                            print(f"Error sending PDF: {pdf_send_error}")
+                            # Clean up file if sending failed
+                            if os.path.exists(pdf_filename):
+                                pdf_generator.cleanup_file(pdf_filename)
+                                
+                except Exception as pdf_error:
+                    print(f"Error generating PDF: {pdf_error}")
+                
+                # Fallback to text message
+                try:
+                    await update.message.reply_text(
+                        f"🧮 **Math Solution**\n\n"
+                        f"**Expression:** `{expression}`\n"
+                        f"**Result:** `{result}`\n\n"
+                        f"**Steps:**\n```\n{steps or 'Direct calculation'}\n```",
+                        parse_mode='Markdown',
+                        reply_markup=self.reply_markup
+                    )
+                except Exception as text_error:
+                    print(f"Error with markdown text: {text_error}")
+                    # Send without markdown as last resort
+                    await update.message.reply_text(
+                        f"🧮 Math Solution\n\n"
+                        f"Expression: {expression}\n"
+                        f"Result: {result}\n\n"
+                        f"Steps: {steps or 'Direct calculation'}",
+                        reply_markup=self.reply_markup
+                    )
+            else:
+                await update.message.reply_text(
+                    f"❌ **Error solving expression:**\n`{expression}`\n\n"
+                    f"**Error:** {result}\n\n"
+                    "Please check your expression and try again.\n\n"
+                    "**Tips:**\n"
+                    "• Use * for multiplication (2*3, not 2×3)\n"
+                    "• Use ^ for powers (2^3, not 2³)\n"
+                    "• Check parentheses are balanced\n"
+                    "• Use standard function names (sin, cos, log)",
+                    parse_mode='Markdown',
+                    reply_markup=self.reply_markup
+                )
+                
+        except Exception as e:
+            print(f"Critical error in solve_math_expression: {e}")
             await update.message.reply_text(
-                f"❌ **Error solving expression:**\n`{expression}`\n\n"
-                f"**Error:** {result}\n\n"
-                "Please check your expression and try again.",
-                parse_mode='Markdown'
+                "❌ **Unexpected Error**\n\n"
+                "Something went wrong while solving your expression. Please try again or contact support if the problem persists.",
+                parse_mode='Markdown',
+                reply_markup=self.reply_markup
             )
     
     async def prompt_function_analysis(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1047,6 +1160,49 @@ Just tap a button below or type your math problem directly!"""
             text="Choose an option:",
             reply_markup=keyboard
         )
+
+    async def reset_chat_context(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Reset chat context and conversation history"""
+        user_id = update.effective_user.id
+        
+        try:
+            # Clear user conversation state if exists
+            if user_id in self.user_states:
+                del self.user_states[user_id]
+            
+            # Clear AI conversation history
+            from app.services.ai_assistant import ai_assistant
+            success = await ai_assistant.clear_conversation_history(user_id)
+            
+            if success:
+                await update.message.reply_text(
+                    "🔄 **Chat Context Reset!**\n\n"
+                    "✅ Conversation history cleared\n"
+                    "✅ AI context reset\n"
+                    "✅ All pending states cleared\n\n"
+                    "You can now start fresh with me! Try asking something new or use any of the buttons below.",
+                    parse_mode='Markdown',
+                    reply_markup=self.reply_markup
+                )
+            else:
+                await update.message.reply_text(
+                    "🔄 **Chat Context Reset!**\n\n"
+                    "✅ Local states cleared\n"
+                    "⚠️ Note: AI conversation history couldn't be fully cleared\n\n"
+                    "You can still start fresh! Try the buttons below.",
+                    parse_mode='Markdown',
+                    reply_markup=self.reply_markup
+                )
+            
+        except Exception as e:
+            print(f"Error resetting chat context: {e}")
+            await update.message.reply_text(
+                "🔄 **Chat Reset**\n\n"
+                "✅ Basic reset completed\n\n"
+                "You can continue using the bot normally.",
+                parse_mode='Markdown',
+                reply_markup=self.reply_markup
+            )
 
 # Global bot handlers instance
 bot_handlers = BotHandlers()

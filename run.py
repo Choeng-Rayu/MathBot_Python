@@ -93,9 +93,9 @@ async def start_polling_mode():
     """Start bot in polling mode for development"""
     try:
         from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
-        from bot_handlers import bot_handlers
-        from alarm_manager import AlarmManager
-        import alarm_manager as alarm_module
+        from app.handlers.bot_handlers import bot_handlers
+        from app.services.alarm_manager import AlarmManager
+        import app.services.alarm_manager as alarm_module
 
         print("🔄 Starting bot in DEVELOPMENT mode (polling)...")
 
@@ -128,7 +128,7 @@ async def start_polling_mode():
         alarm_manager_instance.schedule_all_user_alarms()
 
         # Schedule automatic file cleanup
-        from pdf_generator import pdf_generator
+        from app.services.pdf_generator import pdf_generator
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
         cleanup_scheduler = AsyncIOScheduler()

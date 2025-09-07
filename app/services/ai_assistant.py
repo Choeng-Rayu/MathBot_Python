@@ -433,5 +433,20 @@ Remember: You are here to assist users with mathematics, learning, and productiv
 
         return "\n\n".join(prompt_parts)
 
+    async def clear_conversation_history(self, user_id: int) -> bool:
+        """Clear user's conversation history"""
+        try:
+            # Clear conversation history using MongoDB operations
+            result = db_manager.users.update_one(
+                {"user_id": user_id},
+                {"$unset": {"conversation_history": ""}}
+            )
+            
+            return result.modified_count > 0 or result.matched_count > 0
+            
+        except Exception as e:
+            print(f"Error clearing conversation history: {e}")
+            return False
+
 # Global AI assistant instance
 ai_assistant = AIAssistant()
