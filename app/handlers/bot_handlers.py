@@ -50,7 +50,7 @@ class BotHandlers:
                 welcome_message = (
                     f"🎉 Welcome to MathBot, {user.first_name}!\n\n"
                     "I can help you with:\n"
-                    "🧮 **Solve Math Expressions** - Calculate complex mathematical expressions\n"
+                    "🧮 **Solve Math & Equations** - Calculate expressions and solve equations instantly\n"
                     "📈 **Analyze Functions** - Get detailed function analysis with graphs\n"
                     "⏰ **Set Custom Alarms** - Create reminders with streak tracking\n"
                     "🤖 **AI Chat** - Natural conversation with intelligent assistance\n\n"
@@ -75,6 +75,10 @@ class BotHandlers:
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle text messages"""
+        # Check if message exists and has text
+        if not update.message or not update.message.text:
+            return
+            
         user_id = update.effective_user.id
         text = update.message.text
 
@@ -395,10 +399,21 @@ class BotHandlers:
         )
 
     def is_math_expression(self, text: str) -> bool:
-        """Check if text looks like a math expression - improved detection"""
+        """Check if text looks like a math expression or equation - improved detection"""
         # Skip very short text or pure words/questions
         if len(text.strip()) < 2:
             return False
+        
+        # Check for equations first (contains = sign)
+        if '=' in text:
+            # Simple check: if it has = and looks like math, it's probably an equation
+            parts = text.split('=')
+            if len(parts) == 2:
+                # Both sides should have math-like content
+                left, right = parts[0].strip(), parts[1].strip()
+                if (any(c.isdigit() or c in 'xyz+-*/^()' for c in left) and 
+                    any(c.isdigit() or c in 'xyz+-*/^()' for c in right)):
+                    return True
         
         # Skip if it's clearly a question or conversation
         question_words = ['what', 'how', 'why', 'when', 'where', 'who', 'can', 'could', 'would', 'should', 'help', 'tell', 'explain']
@@ -417,6 +432,8 @@ class BotHandlers:
             r'\d+!',  # Factorials: 5!
             r'\d+\^\d+',  # Powers: 2^3
             r'pi\s*[\+\-\*/]|e\s*[\+\-\*/]',  # Constants with operators
+            r'[a-z]\s*[\+\-\*/\^]\s*\d+',  # Variable with number: x+5, 2x
+            r'\d+\s*\*?\s*[a-z]',  # Number with variable: 2x, 3*y
         ]
         
         # If it has strong math indicators, it's likely math
@@ -429,6 +446,7 @@ class BotHandlers:
             r'\d+\.\d+',  # Decimals
             r'\(\d+\)',  # Numbers in parentheses
             r'(pi|e)\b',  # Math constants
+            r'[a-z]',  # Variables
         ]
         
         weak_matches = sum(1 for pattern in weak_math_patterns if re.search(pattern, text.lower()))
@@ -493,26 +511,56 @@ class BotHandlers:
         return bool(re.match(time_pattern, text.strip()))
     
     async def prompt_math_expression(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Prompt user to enter a math expression"""
-        await update.message.reply_text(
-            "🧮 **Math Expression Solver**\n\n"
-            "Send me a mathematical expression to solve!\n\n"
-            "**Examples:**\n"
-            "• `2^3 + log(100) + sin(pi/2)`\n"
-            "• `sqrt(16) * cos(0) + 5!`\n"
-            "• `exp(2) - ln(10) + abs(-5)`\n\n"
-            "I support:\n"
-            "✅ Basic operations (+, -, *, /, ^)\n"
-            "✅ Trigonometric functions (sin, cos, tan)\n"
-            "✅ Logarithms (log, ln, log10)\n"
-            "✅ Exponentials and roots (exp, sqrt)\n"
-            "✅ Constants (pi, e)\n"
-            "✅ Factorials (!)",
-            parse_mode='Markdown'
-        )
+        """Prompt user to enter a math expression or equation"""
+        try:
+            await update.message.reply_text(
+                "🧮 *Math Expression & Equation Solver*\n\n"
+                "Send me a mathematical expression or equation to solve!\n\n"
+                "*Expression Examples:*\n"
+                "• 2^3 + log(100) + sin(pi/2)\n"
+                "• sqrt(16) * cos(0) + 5!\n"
+                "• exp(2) - ln(10) + abs(-5)\n\n"
+                "*Equation Examples:*\n"
+                "• x + 5 = 12 (one-step addition)\n"
+                "• 2x = 10 (one-step multiplication)\n"
+                "• x/3 = 4 (one-step division)\n"
+                "• 3x - 7 = 14 (two-step equation)\n\n"
+                "I support:\n"
+                "✅ Basic operations (+, -, *, /, ^)\n"
+                "✅ Trigonometric functions (sin, cos, tan)\n"
+                "✅ Logarithms (log, ln, log10)\n"
+                "✅ Exponentials and roots (exp, sqrt)\n"
+                "✅ Constants (pi, e)\n"
+                "✅ Factorials (!)\n"
+                "✅ One-step and multi-step equations",
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            # Fallback without markdown if parsing fails
+            await update.message.reply_text(
+                "🧮 Math Expression & Equation Solver\n\n"
+                "Send me a mathematical expression or equation to solve!\n\n"
+                "Expression Examples:\n"
+                "• 2^3 + log(100) + sin(pi/2)\n"
+                "• sqrt(16) * cos(0) + 5!\n"
+                "• exp(2) - ln(10) + abs(-5)\n\n"
+                "Equation Examples:\n"
+                "• x + 5 = 12 (one-step addition)\n"
+                "• 2x = 10 (one-step multiplication)\n"
+                "• x/3 = 4 (one-step division)\n"
+                "• 3x - 7 = 14 (two-step equation)\n\n"
+                "I support:\n"
+                "✅ Basic operations (+, -, *, /, ^)\n"
+                "✅ Trigonometric functions (sin, cos, tan)\n"
+                "✅ Logarithms (log, ln, log10)\n"
+                "✅ Exponentials and roots (exp, sqrt)\n"
+                "✅ Constants (pi, e)\n"
+                "✅ Factorials (!)\n"
+                "✅ One-step and multi-step equations"
+            )
     
     async def solve_math_expression(self, update: Update, context: ContextTypes.DEFAULT_TYPE, expression: str):
-        """Solve a mathematical expression - improved error handling"""
+        """Solve a mathematical expression or equation - returns simple text message"""
         user_id = update.effective_user.id
         
         try:
@@ -523,78 +571,57 @@ class BotHandlers:
             if not expression or len(expression.strip()) == 0:
                 await update.message.reply_text(
                     "❌ **Invalid Expression**\n\n"
-                    "Please provide a valid mathematical expression to solve.",
+                    "Please provide a valid mathematical expression or equation to solve.",
                     parse_mode='Markdown',
                     reply_markup=self.reply_markup
                 )
                 return
             
-            # Solve the expression
+            # Solve the expression or equation
             success, result, steps = math_solver.solve_expression(expression)
             
             if success:
-                # Try to generate PDF first
+                # Send simple text message (no PDF generation)
                 try:
-                    pdf_filename = pdf_generator.generate_math_pdf(
-                        expression=expression,
-                        result=result,
-                        steps=steps,
-                        user_id=user_id
-                    )
+                    # Determine if it's an equation or expression
+                    problem_type = "Equation" if '=' in expression else "Expression"
                     
-                    if pdf_filename and os.path.exists(pdf_filename):
-                        # Send PDF
-                        try:
-                            with open(pdf_filename, 'rb') as pdf_file:
-                                await context.bot.send_document(
-                                    chat_id=update.effective_chat.id,
-                                    document=pdf_file,
-                                    filename=f"math_solution_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                                    caption=f"📊 **Solution for:** `{expression}`\n**Result:** `{result}`",
-                                    parse_mode='Markdown'
-                                )
-                            
-                            # Clean up PDF file
-                            pdf_generator.cleanup_file(pdf_filename)
-                            return
-                            
-                        except Exception as pdf_send_error:
-                            print(f"Error sending PDF: {pdf_send_error}")
-                            # Clean up file if sending failed
-                            if os.path.exists(pdf_filename):
-                                pdf_generator.cleanup_file(pdf_filename)
-                                
-                except Exception as pdf_error:
-                    print(f"Error generating PDF: {pdf_error}")
-                
-                # Fallback to text message
-                try:
+                    message = f"🧮 *Math {problem_type} Solution*\n\n"
+                    message += f"*Problem:* {expression}\n"
+                    message += f"*Answer:* {result}\n\n"
+                    
+                    if steps:
+                        message += f"*Steps:*\n{steps}"
+                    else:
+                        message += "*Steps:* Direct calculation"
+                    
                     await update.message.reply_text(
-                        f"🧮 **Math Solution**\n\n"
-                        f"**Expression:** `{expression}`\n"
-                        f"**Result:** `{result}`\n\n"
-                        f"**Steps:**\n```\n{steps or 'Direct calculation'}\n```",
+                        message,
                         parse_mode='Markdown',
                         reply_markup=self.reply_markup
                     )
+                    
                 except Exception as text_error:
                     print(f"Error with markdown text: {text_error}")
-                    # Send without markdown as last resort
+                    # Send without markdown as fallback
                     await update.message.reply_text(
                         f"🧮 Math Solution\n\n"
-                        f"Expression: {expression}\n"
-                        f"Result: {result}\n\n"
+                        f"Problem: {expression}\n"
+                        f"Answer: {result}\n\n"
                         f"Steps: {steps or 'Direct calculation'}",
                         reply_markup=self.reply_markup
                     )
             else:
                 await update.message.reply_text(
-                    f"❌ **Error solving expression:**\n`{expression}`\n\n"
+                    f"❌ **Error solving:**\n`{expression}`\n\n"
                     f"**Error:** {result}\n\n"
-                    "Please check your expression and try again.\n\n"
+                    "Please check your input and try again.\n\n"
+                    "**Examples:**\n"
+                    "• Expressions: `2 + 3 * 4`, `sin(30)`, `sqrt(16)`\n"
+                    "• Equations: `x + 5 = 12`, `2x - 3 = 7`, `x/4 = 6`\n\n"
                     "**Tips:**\n"
-                    "• Use * for multiplication (2*3, not 2×3)\n"
-                    "• Use ^ for powers (2^3, not 2³)\n"
+                    "• Use * for multiplication (2*3)\n"
+                    "• Use ^ or ** for powers (2^3 or 2**3)\n"
                     "• Check parentheses are balanced\n"
                     "• Use standard function names (sin, cos, log)",
                     parse_mode='Markdown',
@@ -605,7 +632,7 @@ class BotHandlers:
             print(f"Critical error in solve_math_expression: {e}")
             await update.message.reply_text(
                 "❌ **Unexpected Error**\n\n"
-                "Something went wrong while solving your expression. Please try again or contact support if the problem persists.",
+                "Something went wrong while solving your problem. Please try again or contact support if the problem persists.",
                 parse_mode='Markdown',
                 reply_markup=self.reply_markup
             )

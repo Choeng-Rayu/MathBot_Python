@@ -45,6 +45,10 @@ class MathSolver:
         expression = expression.replace('π', 'pi')
         expression = expression.replace('∞', 'inf')
         
+        # Handle factorial (convert ! to factorial function)
+        expression = re.sub(r'(\d+)!', r'factorial(\1)', expression)
+        expression = re.sub(r'([a-zA-Z]+)!', r'factorial(\1)', expression)
+        
         # Handle implicit multiplication (e.g., 2x -> 2*x, 3(x+1) -> 3*(x+1))
         expression = re.sub(r'(\d)([a-zA-Z])', r'\1*\2', expression)
         expression = re.sub(r'(\d)(\()', r'\1*\2', expression)
@@ -56,15 +60,22 @@ class MathSolver:
     
     def solve_expression(self, expression: str) -> Tuple[bool, str, Optional[str]]:
         """
-        Solve a mathematical expression
+        Solve a mathematical expression or equation
         Returns: (success, result, steps)
         """
         try:
+            # Check if it's an equation (contains = sign)
+            if '=' in expression:
+                return self.solve_equation(expression)
+            
             # Preprocess the expression
             processed_expr = self.preprocess_expression(expression)
             
+            # Combine constants and functions for sympify
+            sympify_locals = {**self.constants, **self.functions}
+            
             # Parse the expression using SymPy
-            expr = sp.sympify(processed_expr, locals=self.constants)
+            expr = sp.sympify(processed_expr, locals=sympify_locals)
             
             # Evaluate the expression
             result = expr.evalf()
@@ -85,6 +96,118 @@ class MathSolver:
             
         except Exception as e:
             return False, f"Error: {str(e)}", None
+
+    def solve_equation(self, equation: str) -> Tuple[bool, str, Optional[str]]:
+        """
+        Solve one-step and multi-step equations
+        Returns: (success, solution, steps)
+        """
+        try:
+            # Split equation by = sign
+            parts = equation.split('=')
+            if len(parts) != 2:
+                return False, "Invalid equation format. Use format: expression = expression", None
+            
+            left_side, right_side = parts[0].strip(), parts[1].strip()
+            
+            # Preprocess both sides
+            left_expr = self.preprocess_expression(left_side)
+            right_expr = self.preprocess_expression(right_side)
+            
+            # Combine constants and functions for sympify
+            sympify_locals = {**self.constants, **self.functions}
+            
+            # Parse both sides
+            left = sp.sympify(left_expr, locals=sympify_locals)
+            right = sp.sympify(right_expr, locals=sympify_locals)
+            
+            # Create equation
+            equation_obj = sp.Eq(left, right)
+            
+            # Find variables in the equation
+            variables = equation_obj.free_symbols
+            
+            if len(variables) == 0:
+                # No variables - check if equation is true
+                is_true = sp.simplify(left - right) == 0
+                result = "True" if is_true else "False"
+                steps = f"Checking: {left} = {right}\nResult: {result}"
+                return True, result, steps
+            
+            elif len(variables) == 1:
+                # One variable - solve for it
+                var = list(variables)[0]
+                solutions = sp.solve(equation_obj, var)
+                
+                if not solutions:
+                    return True, "No solution", f"The equation {equation} has no solution"
+                
+                # Format solutions
+                if len(solutions) == 1:
+                    sol = solutions[0]
+                    if sol.is_real:
+                        if sol == int(sol):
+                            formatted_sol = str(int(sol))
+                        else:
+                            formatted_sol = f"{float(sol):.10g}"
+                    else:
+                        formatted_sol = str(sol)
+                    
+                    result = f"{var} = {formatted_sol}"
+                    steps = self._generate_equation_steps(equation, var, sol)
+                    return True, result, steps
+                else:
+                    # Multiple solutions
+                    formatted_sols = []
+                    for sol in solutions:
+                        if sol.is_real:
+                            if sol == int(sol):
+                                formatted_sols.append(str(int(sol)))
+                            else:
+                                formatted_sols.append(f"{float(sol):.10g}")
+                        else:
+                            formatted_sols.append(str(sol))
+                    
+                    result = f"{var} = {', '.join(formatted_sols)}"
+                    steps = f"Solving: {equation}\nSolutions: {result}"
+                    return True, result, steps
+            
+            else:
+                # Multiple variables
+                return False, "Equation has multiple variables. Please specify which variable to solve for.", None
+                
+        except Exception as e:
+            return False, f"Error solving equation: {str(e)}", None
+
+    def _generate_equation_steps(self, original_equation: str, variable, solution) -> str:
+        """Generate step-by-step solution for equations"""
+        steps = []
+        
+        try:
+            steps.append(f"Original equation: {original_equation}")
+            
+            # Detect equation type
+            if '+' in original_equation and '-' not in original_equation:
+                steps.append("This is an addition equation")
+                steps.append("To solve: subtract the constant from both sides")
+            elif '-' in original_equation and '+' not in original_equation:
+                steps.append("This is a subtraction equation")
+                steps.append("To solve: add the constant to both sides")
+            elif '*' in original_equation and '/' not in original_equation:
+                steps.append("This is a multiplication equation")
+                steps.append("To solve: divide both sides by the coefficient")
+            elif '/' in original_equation and '*' not in original_equation:
+                steps.append("This is a division equation")
+                steps.append("To solve: multiply both sides by the divisor")
+            else:
+                steps.append("Solving the equation step by step...")
+            
+            steps.append(f"Solution: {variable} = {solution}")
+            
+            return "\n".join(steps)
+            
+        except:
+            return f"Equation: {original_equation}\nSolution: {variable} = {solution}"
     
     def _generate_steps(self, expr, result) -> str:
         """Generate step-by-step solution if possible"""
@@ -116,7 +239,8 @@ class MathSolver:
         """Validate if the expression is mathematically valid"""
         try:
             processed_expr = self.preprocess_expression(expression)
-            sp.sympify(processed_expr, locals=self.constants)
+            sympify_locals = {**self.constants, **self.functions}
+            sp.sympify(processed_expr, locals=sympify_locals)
             return True, "Valid expression"
         except Exception as e:
             return False, f"Invalid expression: {str(e)}"
@@ -125,7 +249,8 @@ class MathSolver:
         """Get additional information about the expression"""
         try:
             processed_expr = self.preprocess_expression(expression)
-            expr = sp.sympify(processed_expr, locals=self.constants)
+            sympify_locals = {**self.constants, **self.functions}
+            expr = sp.sympify(processed_expr, locals=sympify_locals)
             
             info = {
                 "variables": list(expr.free_symbols),
