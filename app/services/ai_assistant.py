@@ -139,10 +139,8 @@ Remember: You are here to assist users with mathematics, learning, and productiv
             response = await self.call_deepseek_api(messages, user_id)
 
         if response:
-            # Get user preference to determine if they want to see AI model info
-            ai_icons = {"gemini": "🧠", "deepseek": "🔬"}
-            icon = ai_icons.get(primary_ai, "🤖")
-            return f"{icon} **{primary_ai.title()} AI**: {response}"
+            # Return response without showing which AI was used (cleaner UX)
+            return response
 
         # Try fallback AI
         logger.info(f"Primary AI failed, trying {fallback_ai} AI for user {user_id}")
@@ -153,9 +151,8 @@ Remember: You are here to assist users with mathematics, learning, and productiv
             response = await self.call_deepseek_api(messages, user_id)
 
         if response:
-            ai_icons = {"gemini": "🧠", "deepseek": "🔬"}
-            icon = ai_icons.get(fallback_ai, "🤖")
-            return f"{icon} **{fallback_ai.title()} AI** (fallback): {response}"
+            # Return response without mentioning fallback (cleaner UX)
+            return response
 
         # Both AIs failed
         return self.get_fallback_response("")
@@ -193,10 +190,10 @@ Remember: You are here to assist users with mathematics, learning, and productiv
                         return None
 
         except asyncio.TimeoutError:
-            logger.error("DeepSeek API timeout")
+            logger.error("DeepSeek API timeout after 30 seconds")
             return None
         except Exception as e:
-            logger.error(f"DeepSeek API error: {e}")
+            logger.error(f"DeepSeek API exception: {type(e).__name__}: {str(e)}")
             return None
 
     def get_fallback_response(self, user_message: str = "") -> str:
@@ -410,10 +407,10 @@ Remember: You are here to assist users with mathematics, learning, and productiv
                         return None
 
         except asyncio.TimeoutError:
-            logger.error("Gemini API timeout")
+            logger.error("Gemini API timeout after 30 seconds")
             return None
         except Exception as e:
-            logger.error(f"Gemini API error: {e}")
+            logger.error(f"Gemini API exception: {type(e).__name__}: {str(e)}")
             return None
 
     def _convert_messages_to_gemini_prompt(self, messages: List[Dict]) -> str:

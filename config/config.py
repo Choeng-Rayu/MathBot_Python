@@ -19,7 +19,8 @@ class Config:
 
     # Google Gemini AI Configuration
     GOOGLE_GEMINI_API_KEY = os.getenv("GOOGLE_GEMINI_API_KEY")
-    GOOGLE_GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    # Using latest Gemini 2.5 Flash model (June 2025 - supports 1M tokens)
+    GOOGLE_GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent"
 
     # AI Model Selection (gemini, deepseek, or auto)
     AI_MODEL = os.getenv("AI_MODEL", "auto")  # auto will try gemini first, then deepseek
