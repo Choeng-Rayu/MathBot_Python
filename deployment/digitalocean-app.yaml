@@ -53,7 +53,7 @@ services:
     value: "sk-698124ba5ed24bcea3c8d298b73f2f52"
     scope: RUN_TIME
   - key: GOOGLE_GEMINI_API_KEY
-    value: "AIzaSyC2xuhoigUFCPp9g_MkhTrFbOKDlTWK6Ks"
+    value: "AIzaSyD_52G0bVcP5FCMlf9nye3g6CAN9vYybrs"
     scope: RUN_TIME
   - key: AI_MODEL
     value: "auto"
