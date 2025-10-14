@@ -41,7 +41,7 @@ services:
   - key: LOG_LEVEL
     value: INFO
   - key: TELEGRAM_BOT_TOKEN
-    value: "7659640601:AAGSNwtPTiI7XZbd02DMv08XLRMcu2Jw74c"
+    value: "7659640601:AAHdXiu28zlGM1Ra4T4CU_59O-3CirQZdIM"
     scope: RUN_TIME
   - key: WEBHOOK_URL
     value: "https://hybridcoffee-za9sy.ondigitalocean.app"

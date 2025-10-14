@@ -127,7 +127,7 @@ def main():
         ("HOST", "0.0.0.0"),
         ("PORT", "8000"),
         ("LOG_LEVEL", "INFO"),
-        ("TELEGRAM_BOT_TOKEN", "7659640601:AAGSNwtPTiI7XZbd02DMv08XLRMcu2Jw74c"),
+        ("TELEGRAM_BOT_TOKEN", "7659640601:AAHdXiu28zlGM1Ra4T4CU_59O-3CirQZdIM"),
         ("WEBHOOK_URL", app_url),
         ("DEEPSEEK_API_KEY", "sk-698124ba5ed24bcea3c8d298b73f2f52"),
         ("GOOGLE_GEMINI_API_KEY", "AIzaSyC2xuhoigUFCPp9g_MkhTrFbOKDlTWK6Ks"),
